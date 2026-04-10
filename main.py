@@ -7,7 +7,7 @@ import io
 import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins="*")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
@@ -30,8 +30,10 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
-@app.route("/api/analyze", methods=["POST"])
+@app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
+    if request.method == "OPTIONS":
+        return "", 200
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
