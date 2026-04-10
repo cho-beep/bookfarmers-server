@@ -11,6 +11,16 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel("gemini-2.5-flash")
 
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization"
+    return response
+
+@app.after_request
+def after_request(response):
+    return add_cors_headers(response)
+
 def extract_text(file_bytes, filename):
     name = filename.lower()
     if name.endswith(".pdf"):
@@ -28,17 +38,13 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
-@app.after_request
-def after_request(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return response
-
-@app.route("/api/analyze", methods=["POST", "OPTIONS"])
+@app.route("/api/analyze", methods=["GET", "POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        return make_response("", 200)
+        response = make_response("", 204)
+        return add_cors_headers(response)
+    if request.method == "GET":
+        return jsonify({"status": "ok"})
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
