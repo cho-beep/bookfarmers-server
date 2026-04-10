@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, make_response
 import google.generativeai as genai
 import pdfplumber
 import docx
@@ -7,11 +6,16 @@ import io
 import os
 
 app = Flask(__name__)
-CORS(app, origins="*")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel("gemini-2.5-flash")
+
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 def extract_text(file_bytes, filename):
     name = filename.lower()
@@ -33,7 +37,8 @@ def extract_text(file_bytes, filename):
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        return "", 200
+        response = make_response("", 200)
+        return add_cors(response)
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
@@ -44,9 +49,11 @@ def analyze():
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
     try:
         response = model.generate_content(prompt)
-        return jsonify({"result": response.text})
+        resp = make_response(jsonify({"result": response.text}))
+        return add_cors(resp)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        resp = make_response(jsonify({"error": str(e)}), 500)
+        return add_cors(resp)
 
 @app.route("/", methods=["GET"])
 def health():
