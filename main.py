@@ -1,25 +1,23 @@
 from flask import Flask, request, jsonify, make_response
-import google.generativeai as genai
 import pdfplumber
 import docx
 import io
 import os
+import requests
 
 app = Flask(__name__)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
 
-def add_cors_headers(response):
+def add_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 @app.after_request
 def after_request(response):
-    return add_cors_headers(response)
+    return add_cors(response)
 
 def extract_text(file_bytes, filename):
     name = filename.lower()
@@ -38,11 +36,19 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
+def call_gemini(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    res = requests.post(url, json={
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 8000}
+    }, timeout=120)
+    data = res.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
 @app.route("/api/analyze", methods=["GET", "POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        response = make_response("", 204)
-        return add_cors_headers(response)
+        return make_response("", 204)
     if request.method == "GET":
         return jsonify({"status": "ok"})
     prompt = request.form.get("prompt", "")
@@ -54,8 +60,8 @@ def analyze():
     if file_text:
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
     try:
-        response = model.generate_content(prompt)
-        return jsonify({"result": response.text})
+        result = call_gemini(prompt)
+        return jsonify({"result": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
