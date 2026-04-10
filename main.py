@@ -37,15 +37,28 @@ def extract_text(file_bytes, filename):
     return ""
 
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={GEMINI_KEY}"
-    res = requests.post(url, json={
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 8000}
-    }, timeout=120)
-    data = res.json()
-    if "candidates" not in data:
-        raise Exception(f"API 오류: {data}")
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    
+    for attempt in range(3):
+        try:
+            res = requests.post(url, json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": 8000}
+            }, timeout=120)
+            data = res.json()
+            if "candidates" in data:
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            if data.get("error", {}).get("code") == 503:
+                import time
+                time.sleep(5)
+                continue
+            raise Exception(f"API 오류: {data}")
+        except requests.exceptions.Timeout:
+            if attempt == 2:
+                raise Exception("Gemini 응답 시간 초과. 다시 시도해주세요.")
+            import time
+            time.sleep(3)
+    raise Exception("Gemini 서버가 불안정합니다. 잠시 후 다시 시도해주세요.")
 
 @app.route("/api/analyze", methods=["GET", "POST", "OPTIONS"])
 def analyze():
