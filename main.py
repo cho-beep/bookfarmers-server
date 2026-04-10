@@ -11,12 +11,6 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel("gemini-2.5-flash")
 
-def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
 def extract_text(file_bytes, filename):
     name = filename.lower()
     if name.endswith(".pdf"):
@@ -34,11 +28,17 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
+@app.after_request
+def after_request(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        response = make_response("", 200)
-        return add_cors(response)
+        return make_response("", 200)
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
@@ -49,11 +49,9 @@ def analyze():
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
     try:
         response = model.generate_content(prompt)
-        resp = make_response(jsonify({"result": response.text}))
-        return add_cors(resp)
+        return jsonify({"result": response.text})
     except Exception as e:
-        resp = make_response(jsonify({"error": str(e)}), 500)
-        return add_cors(resp)
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/", methods=["GET"])
 def health():
