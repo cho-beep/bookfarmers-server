@@ -43,6 +43,8 @@ def call_gemini(prompt):
         "generationConfig": {"maxOutputTokens": 8000}
     }, timeout=120)
     data = res.json()
+    if "candidates" not in data:
+        raise Exception(f"API 오류: {data}")
     return data["candidates"][0]["content"]["parts"][0]["text"]
 
 @app.route("/api/analyze", methods=["GET", "POST", "OPTIONS"])
