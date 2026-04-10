@@ -39,9 +39,7 @@ def analyze():
         file_bytes = file.read()
         file_text = extract_text(file_bytes, file.filename)
     if file_text:
-        prompt = prompt.replace("{{FILE_CONTENT}}", file_text[:6000])
-    else:
-        prompt = prompt.replace("{{FILE_CONTENT}}", "")
+        prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
     try:
         response = model.generate_content(prompt)
         return jsonify({"result": response.text})
