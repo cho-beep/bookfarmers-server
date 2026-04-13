@@ -8,7 +8,7 @@ import os
 import requests
 
 app = Flask(__name__)
-CORS(app, origins="*")
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
@@ -37,7 +37,11 @@ def extract_text(file_bytes, filename):
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        return "", 200
+        response = jsonify({})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return response, 200
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
@@ -55,7 +59,9 @@ def analyze():
 @app.route("/api/books", methods=["GET", "OPTIONS"])
 def search_books():
     if request.method == "OPTIONS":
-        return "", 200
+        response = jsonify({})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response, 200
     query = request.args.get("query", "")
     display = request.args.get("display", "30")
     sort = request.args.get("sort", "date")
@@ -75,7 +81,9 @@ def search_books():
 @app.route("/api/news", methods=["GET", "OPTIONS"])
 def search_news():
     if request.method == "OPTIONS":
-        return "", 200
+        response = jsonify({})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        return response, 200
     query = request.args.get("query", "")
     if not query:
         return jsonify({"error": "query 파라미터가 필요합니다"}), 400
