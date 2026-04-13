@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import pdfplumber
 import docx
 import io
@@ -11,8 +12,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+client = genai.Client(api_key=GEMINI_KEY)
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
@@ -58,7 +58,14 @@ def analyze():
     if file_text:
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=8192,
+                timeout=240
+            )
+        )
         return jsonify({"result": response.text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
