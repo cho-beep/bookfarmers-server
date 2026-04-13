@@ -6,7 +6,6 @@ import docx
 import io
 import os
 import requests
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -71,37 +70,3 @@ def search_books():
         res = requests.get("https://openapi.naver.com/v1/search/book.json", headers=headers, params=params)
         return jsonify(res.json())
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/news", methods=["GET", "OPTIONS"])
-def search_news():
-    if request.method == "OPTIONS":
-        return "", 200
-    query = request.args.get("query", "")
-    if not query:
-        return jsonify({"error": "query 파라미터가 필요합니다"}), 400
-    headers = {
-        "X-Naver-Client-Id": NAVER_CLIENT_ID,
-        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET
-    }
-    params = {"query": query, "display": "5", "sort": "date"}
-    try:
-        res = requests.get("https://openapi.naver.com/v1/search/news.json", headers=headers, params=params)
-        data = res.json()
-        items = data.get("items", [])
-        results = []
-        for item in items:
-            desc = item.get("description", "")
-            title = item.get("title", "").replace("<b>","").replace("</b>","")
-            results.append({"title": title, "description": desc})
-        return jsonify({"items": results})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/", methods=["GET"])
-def health():
-    return "OK"
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
