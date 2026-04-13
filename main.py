@@ -43,8 +43,8 @@ def call_gemini(prompt):
         try:
             res = requests.post(url, json={
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": 8000}
-            }, timeout=120)
+                "generationConfig": {"maxOutputTokens": 16000}
+            }, timeout=180)
             data = res.json()
             if "candidates" in data:
                 return data["candidates"][0]["content"]["parts"][0]["text"]
