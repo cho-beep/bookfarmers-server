@@ -12,7 +12,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
