@@ -1,26 +1,21 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import google.generativeai as genai
 import pdfplumber
 import docx
 import io
 import os
 import requests
-import time
-from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+CORS(app, origins="*")
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash")
 
-def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return response
-
-@app.after_request
-def after_request(response):
-    return add_cors(response)
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 
 def extract_text(file_bytes, filename):
     name = filename.lower()
@@ -39,80 +34,41 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
-def get_yes24_bestsellers(keyword):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        url = "https://www.yes24.com/Product/Search?domain=BOOK&query=" + requests.utils.quote(keyword) + "&sorttype=2&page=1"
-        res = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(res.text, "lxml")
-        books = []
-        items = soup.select(".goods_info")[:10]
-        for item in items:
-            title_el = item.select_one(".goods_name a")
-            author_el = item.select_one(".goods_auth")
-            pub_el = item.select_one(".goods_pub")
-            price_el = item.select_one(".goods_price strong")
-            date_el = item.select_one(".goods_date")
-            if title_el:
-                books.append({
-                    "title": title_el.get_text(strip=True),
-                    "author": author_el.get_text(strip=True) if author_el else "",
-                    "publisher": pub_el.get_text(strip=True) if pub_el else "",
-                    "price": price_el.get_text(strip=True) if price_el else "",
-                    "date": date_el.get_text(strip=True) if date_el else ""
-                })
-        return books
-    except Exception:
-        return []
-
-def call_gemini(prompt):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_KEY
-    for attempt in range(3):
-        try:
-            res = requests.post(url, json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": 16000}
-            }, timeout=180)
-            data = res.json()
-            if "candidates" in data:
-                return data["candidates"][0]["content"]["parts"][0]["text"]
-            if data.get("error", {}).get("code") == 503:
-                time.sleep(5)
-                continue
-            raise Exception("API 오류: " + str(data))
-        except requests.exceptions.Timeout:
-            if attempt == 2:
-                raise Exception("Gemini 응답 시간 초과. 다시 시도해주세요.")
-            time.sleep(3)
-    raise Exception("Gemini 서버가 불안정합니다. 잠시 후 다시 시도해주세요.")
-
-@app.route("/api/analyze", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        return make_response("", 204)
-    if request.method == "GET":
-        return jsonify({"status": "ok"})
+        return "", 200
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
-    use_search = request.form.get("use_search", "false") == "true"
-    keyword = request.form.get("search_keyword", "")
     file_text = ""
     if file:
         file_bytes = file.read()
         file_text = extract_text(file_bytes, file.filename)
     if file_text:
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
-    if use_search and keyword:
-        books = get_yes24_bestsellers(keyword)
-        if books:
-            book_info = "\n".join([
-                "- " + b["title"] + " / " + b["author"] + " / " + b["publisher"] + " / " + b["date"] + " / " + b["price"]
-                for b in books
-            ])
-            prompt = prompt + "\n\n[yes24 실시간 검색 결과 - '" + keyword + "' 키워드]\n" + book_info + "\n\n위 실시간 데이터를 우선 참고하여 분석하세요."
     try:
-        result = call_gemini(prompt)
-        return jsonify({"result": result})
+        response = model.generate_content(prompt)
+        return jsonify({"result": response.text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/books", methods=["GET", "OPTIONS"])
+def search_books():
+    if request.method == "OPTIONS":
+        return "", 200
+    query = request.args.get("query", "")
+    display = request.args.get("display", "30")
+    sort = request.args.get("sort", "date")
+    if not query:
+        return jsonify({"error": "query 파라미터가 필요합니다"}), 400
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET
+    }
+    params = {"query": query, "display": display, "sort": sort}
+    try:
+        res = requests.get("https://openapi.naver.com/v1/search/book.json", headers=headers, params=params)
+        return jsonify(res.json())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
