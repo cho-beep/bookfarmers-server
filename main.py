@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import google.generativeai as genai
 import pdfplumber
@@ -8,11 +8,11 @@ import os
 import requests
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
@@ -34,14 +34,21 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
+@app.after_request
+def after_request(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
+
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
-        response = jsonify({})
+        response = make_response("", 200)
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        return response, 200
+        return response
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
@@ -59,9 +66,9 @@ def analyze():
 @app.route("/api/books", methods=["GET", "OPTIONS"])
 def search_books():
     if request.method == "OPTIONS":
-        response = jsonify({})
+        response = make_response("", 200)
         response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 200
+        return response
     query = request.args.get("query", "")
     display = request.args.get("display", "30")
     sort = request.args.get("sort", "date")
@@ -81,9 +88,9 @@ def search_books():
 @app.route("/api/news", methods=["GET", "OPTIONS"])
 def search_news():
     if request.method == "OPTIONS":
-        response = jsonify({})
+        response = make_response("", 200)
         response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 200
+        return response
     query = request.args.get("query", "")
     if not query:
         return jsonify({"error": "query 파라미터가 필요합니다"}), 400
