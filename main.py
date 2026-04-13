@@ -62,8 +62,7 @@ def analyze():
             model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=8192,
-                timeout=240
+            max_output_tokens=8192,
             )
         )
         return jsonify({"result": response.text})
