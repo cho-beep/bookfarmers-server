@@ -6,6 +6,7 @@ import pdfplumber
 import docx
 import io
 import os
+import time
 import requests
 
 app = Flask(__name__)
@@ -34,6 +35,29 @@ def extract_text(file_bytes, filename):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
 
+def call_gemini(prompt, max_retries=3):
+    """503 오류 시 자동 재시도 (최대 3회)"""
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    max_output_tokens=8192,
+                )
+            )
+            return response.text, None
+        except Exception as e:
+            err_str = str(e)
+            print(f"[Gemini attempt {attempt+1}] Error: {err_str}")
+            if "503" in err_str and attempt < max_retries - 1:
+                wait = 5 * (attempt + 1)  # 5초, 10초
+                print(f"[Gemini] 503 감지 → {wait}초 후 재시도...")
+                time.sleep(wait)
+                continue
+            return None, err_str
+    return None, "최대 재시도 횟수 초과"
+
 @app.after_request
 def after_request(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -49,6 +73,7 @@ def analyze():
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         return response
+
     prompt = request.form.get("prompt", "")
     file = request.files.get("file")
     file_text = ""
@@ -57,17 +82,17 @@ def analyze():
         file_text = extract_text(file_bytes, file.filename)
     if file_text:
         prompt = prompt + "\n\n원고 내용:\n" + file_text[:6000]
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-            max_output_tokens=8192,
-            )
-        )
-        return jsonify({"result": response.text})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+    print(f"[/api/analyze] 요청 수신 (프롬프트 길이: {len(prompt)}자)")
+
+    result, error = call_gemini(prompt)
+    if error:
+        print(f"[/api/analyze] 최종 실패: {error}")
+        if "503" in error:
+            return jsonify({"error": "AI 서버가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요."}), 503
+        return jsonify({"error": error}), 500
+
+    return jsonify({"result": result})
 
 @app.route("/api/books", methods=["GET", "OPTIONS"])
 def search_books():
