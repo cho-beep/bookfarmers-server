@@ -6,7 +6,7 @@ import os
 import requests
 
 app = Flask(__name__)
-
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 def add_cors(response):
